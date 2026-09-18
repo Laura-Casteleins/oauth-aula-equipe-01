@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laboratório OAuth - Equipa 01</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        .login-btn {
+            display: inline-block;
+            margin: 10px;
+            padding: 10px 20px;
+            text-decoration: none;
+            color: #333;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .login-btn:hover {
+            background-color: #eee;
+        }
+    </style>
+</head>
+<body>
+    <h1>Login do Laboratório OAuth</h1>
+    
+    <!-- Este parágrafo servirá para mostrar o estado do utilizador mais tarde -->
+    <p id="status">Estado: Não autenticado.</p>
+
+    <div id="login-links">
+        <!-- Estas rotas serão criadas mais à frente na pasta functions/oauth/login/ -->
+        <a href="/oauth/login/google" class="login-btn">Iniciar sessão com o Google</a>
+        <a href="/oauth/login/github" class="login-btn">Iniciar sessão com o GitHub</a>
+    </div>
+
+    <!-- Futuramente, o JavaScript chamará a sua /api/me para atualizar o texto acima -->
+</body>
+</html>
