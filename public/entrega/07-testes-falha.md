@@ -1,5 +1,3 @@
-07-testes-falha.md
-
 # Relatório de Testes de Falha - Projeto OAuth Cloudflare Pages
 
 Este documento regista os cenários de teste de falha executados para validar o comportamento do sistema de autenticação e segurança da aplicação.
