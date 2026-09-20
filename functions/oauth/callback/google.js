@@ -1,8 +1,6 @@
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
-  
-  // 1. O código de autorização enviado pela Google na query string
   const code = url.searchParams.get('code');
 
   if (!code) {
@@ -10,43 +8,45 @@ export async function onRequestGet(context) {
   }
 
   try {
-    // 2. Trocar o código de autorização por um Token de Acesso (Access Token)
+    // 1. Trocar código por token de acesso
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        code: code,
         client_id: env.GOOGLE_CLIENT_ID,
         client_secret: env.GOOGLE_CLIENT_SECRET,
-        redirect_uri: 'https://oauth-aula-equipe-01.pages.dev/oauth/callback/google',
+        code: code,
         grant_type: 'authorization_code',
-      }),
+        redirect_uri: 'https://oauth-aula-equipe-01.pages.dev/oauth/callback/google'
+      })
     });
 
     const tokens = await tokenResponse.json();
+    if (!tokenResponse.ok) throw new Error(tokens.error_description || 'Erro ao obter token');
 
-    if (!tokenResponse.ok) {
-      throw new Error(tokens.error_description || 'Falha ao obter tokens da Google');
-    }
-
-    // 3. Obter as informações do perfil do utilizador usando o Access Token
-    const userResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-      headers: {
-        Authorization: `Bearer ${tokens.access_token}`,
-      },
+    // 2. Buscar perfil do utilizador
+    const userResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokens.access_token}` }
     });
 
     const userInfo = await userResponse.json();
+    if (!userResponse.ok) throw new Error('Erro ao obter dados do utilizador');
 
-    if (!userResponse.ok) {
-      throw new Error('Falha ao obter dados do utilizador da Google');
+    // 3. Salvar/Atualizar na base de dados D1 (se a binding DB existir)
+    if (env.DB) {
+      const userId = `google_${userInfo.id}`;
+      await env.DB.prepare(`
+        INSERT INTO users (id, provider, provider_user_id, name, email, avatar_url)
+        VALUES (?, 'google', ?, ?, ?, ?)
+        ON CONFLICT(provider, provider_user_id) DO UPDATE SET
+          name = excluded.name,
+          email = excluded.email,
+          avatar_url = excluded.avatar_url
+      `).bind(userId, userInfo.id, userInfo.name || '', userInfo.email || '', userInfo.picture || '').run();
     }
 
-    // Por enquanto, vamos retornar os dados do utilizador em formato JSON para testar se funcionou!
     return new Response(JSON.stringify({
-      message: 'Autenticação com Google bem-sucedida!',
+      message: 'Autenticação com Google bem-sucedida e guardada no D1!',
       user: {
         email: userInfo.email,
         name: userInfo.name,
