@@ -2,51 +2,33 @@
 <html lang="pt">
 <head>
     <meta charset="UTF-8">
-    <title>Projeto OAuth - Cloudflare Pages</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel do Utilizador - OAuth</title>
+    <!-- Ligação para o ficheiro CSS separado -->
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <h1>Painel do Utilizador</h1>
-    <div id="auth-status">
-        <p>Estado: <span id="status-text">A verificar...</span></p>
+    <div class="container">
+        <h1>Painel do Utilizador</h1>
+        
+        <div id="auth-status">
+            <p>Estado: <span id="status-text">A verificar...</span></p>
+        </div>
+
+        <div id="login-buttons">
+            <a href="/oauth/login/google" class="btn google-btn">Entrar com Google</a>
+            <a href="/oauth/login/github" class="btn github-btn">Entrar com GitHub</a>
+        </div>
+
+        <div id="user-profile" class="profile-card" style="display: none;">
+            <img id="user-avatar" src="" alt="Avatar" width="80" class="avatar">
+            <h3 id="user-name"></h3>
+            <p id="user-email"></p>
+            <a href="/oauth/logout" class="btn logout-btn">Terminar Sessão (Logout)</a>
+        </div>
     </div>
 
-    <div id="login-buttons">
-        <a href="/oauth/login/google"><button>Entrar com Google</button></a>
-        <a href="/oauth/login/github"><button>Entrar com GitHub</button></a>
-    </div>
-
-    <div id="user-profile" style="display: none;">
-        <img id="user-avatar" src="" alt="Avatar" width="80" style="border-radius: 50%;">
-        <h3 id="user-name"></h3>
-        <p id="user-email"></p>
-        <a href="/oauth/logout"><button>Terminar Sessão (Logout)</button></a>
-    </div>
-
-    <script>
-        // Ao carregar a página, verifica se o utilizador está autenticado via /api/me
-        window.addEventListener('DOMContentLoaded', async () => {
-            try {
-                const response = await fetch('/api/me');
-                const data = await response.json();
-
-                if (data.authenticated) {
-                    document.getElementById('status-text').textContent = 'Autenticado';
-                    document.getElementById('login-buttons').style.display = 'none';
-                    
-                    // Exibir dados do perfil
-                    document.getElementById('user-profile').style.display = 'block';
-                    document.getElementById('user-name').textContent = data.user.name;
-                    document.getElementById('user-email').textContent = data.user.email || data.user.username || '';
-                    if (data.user.avatar_url || data.user.picture) {
-                        document.getElementById('user-avatar').src = data.user.avatar_url || data.user.picture;
-                    }
-                } else {
-                    document.getElementById('status-text').textContent = 'Não autenticado';
-                }
-            } catch (err) {
-                document.getElementById('status-text').textContent = 'Erro ao verificar sessão';
-            }
-        });
-    </script>
+    <!-- Ligação para o ficheiro JavaScript separado -->
+    <script src="app.js"></script>
 </body>
 </html>
