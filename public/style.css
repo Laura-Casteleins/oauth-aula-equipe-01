@@ -1,18 +1,81 @@
 body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            margin-top: 50px;
-        }
-        .login-btn {
-            display: inline-block;
-            margin: 10px;
-            padding: 10px 20px;
-            text-decoration: none;
-            color: #333;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-        }
-        .login-btn:hover {
-            background-color: #eee;
-        }
+    font-family: Arial, sans-serif;
+    background-color: #f4f7f6;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.container {
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    width: 350px;
+}
+
+h1 {
+    color: #333333;
+    margin-bottom: 20px;
+}
+
+#auth-status {
+    margin-bottom: 20px;
+    font-size: 14px;
+    color: #666666;
+}
+
+#status-text {
+    font-weight: bold;
+    color: #007bff;
+}
+
+.btn {
+    display: inline-block;
+    margin: 10px 0;
+    padding: 10px 20px;
+    text-decoration: none;
+    color: #ffffff;
+    border-radius: 4px;
+    font-weight: bold;
+    transition: background-color 0.2s;
+    width: 80%;
+}
+
+.google-btn {
+    background-color: #db4437;
+}
+
+.google-btn:hover {
+    background-color: #c33d2e;
+}
+
+.github-btn {
+    background-color: #333333;
+}
+
+.github-btn:hover {
+    background-color: #1a1a1a;
+}
+
+.logout-btn {
+    background-color: #dc3545;
+}
+
+.logout-btn:hover {
+    background-color: #bd2130;
+}
+
+.profile-card {
+    margin-top: 20px;
+}
+
+.avatar {
+    border-radius: 50%;
+    margin-bottom: 10px;
+    border: 2px solid #ddd;
+}
