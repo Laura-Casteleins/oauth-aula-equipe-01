@@ -32,10 +32,9 @@ export async function onRequestGet(context) {
     const userInfo = await userResponse.json();
     if (!userResponse.ok) throw new Error('Erro ao obter dados do utilizador');
 
-    const userId = `google_${userInfo.id}`;
-
-    // 3. Salvar/Atualizar utilizador na base de dados D1
+    // 3. Salvar/Atualizar utilizador na tabela 'users'
     if (env.DB) {
+      const userId = `google_${userInfo.id}`;
       await env.DB.prepare(`
         INSERT INTO users (id, provider, provider_user_id, name, email, avatar_url)
         VALUES (?, 'google', ?, ?, ?, ?)
@@ -45,15 +44,16 @@ export async function onRequestGet(context) {
           avatar_url = excluded.avatar_url
       `).bind(userId, userInfo.id, userInfo.name || '', userInfo.email || '', userInfo.picture || '').run();
 
-      // 4. Criar Sessão na Base de Dados
+      // 4. Gerar ID de sessão opaco e seguro
       const sessionId = generateSessionId();
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 dias de validade
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
+      // 5. Inserir a sessão na tabela 'sessions'
       await env.DB.prepare(
         `INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)`
       ).bind(sessionId, userId, expiresAt).run();
 
-      // 5. Redirecionar com o Cookie de Sessão seguro
+      // 6. Redirecionar para o /dashboard com o cookie seguro
       return new Response(null, {
         status: 302,
         headers: {
@@ -63,7 +63,7 @@ export async function onRequestGet(context) {
       });
     }
 
-    return new Response('Erro: Base de dados não configurada.', { status: 500 });
+    return new Response('Base de dados DB não configurada.', { status: 500 });
 
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
@@ -73,7 +73,6 @@ export async function onRequestGet(context) {
   }
 }
 
-// Função auxiliar para gerar um ID de sessão seguro (opaco)
 function generateSessionId() {
   const buffer = new Uint8Array(32);
   crypto.getRandomValues(buffer);
