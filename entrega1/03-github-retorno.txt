@@ -1,0 +1,2 @@
+
+https://oauth-aula-equipe-01.pages.dev/oauth/callback/github
