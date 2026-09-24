@@ -1,2 +1,2 @@
-
-https://oauth-aula-equipe-01.pages.dev/oauth/callback/github
+Homepage URL: https://oauth-aula-equipe-01.pages.dev
+URL de Retorno (Redirect URI): https://oauth-aula-equipe-01.pages.dev/oauth/callback/github
