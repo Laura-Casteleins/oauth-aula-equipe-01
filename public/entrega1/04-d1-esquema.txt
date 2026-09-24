@@ -1,0 +1,7 @@
+name                        type
+--------------------------  -----
+oauth_transactions_expiry   index
+_cf_KV                      table
+oauth_transactions          table
+sessions                    table
+users                       table
