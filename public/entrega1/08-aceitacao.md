@@ -20,4 +20,11 @@ Declaramos, para efeitos de avaliação, que:
 * Os testes de sucesso e de falha foram executados com sucesso em ambiente de produção (`.pages.dev`).
 * Os oito ficheiros de evidência obrigatórios encontram-se devidamente organizados na pasta `public/entrega1/`.
 
-*Assinado digitalmente por ambos os elementos da dupla em sinal de concordância e conclusão dos trabalhos.*
+---
+
+## Assinaturas da Dupla
+
+* **Laura Casteleins** — Atestado de conformidade e conclusão das tarefas sob sua responsabilidade.
+* **Gabriel Mendes** — Atestado de conformidade e conclusão das tarefas sob sua responsabilidade.
+
+*Assinado formalmente por ambos os membros da dupla em sinal de concordância e conclusão dos trabalhos em 20/09/2026.*
