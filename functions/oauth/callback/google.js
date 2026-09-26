@@ -1,14 +1,14 @@
 import {
-  createSession
-} from "../../_shared/session.js";
-
-import {
   sha256Base64Url
 } from "../../_shared/crypto.js";
 
 import {
   validateGoogleIdToken
 } from "../../_shared/oidc.js";
+
+import {
+  createSession
+} from "../../_shared/session.js";
 
 
 function getCookie(request, name) {
@@ -52,7 +52,7 @@ export async function onRequestGet(context) {
   try {
 
     // --------------------------------------------------
-    // 1. Verificar erro retornado pelo Google
+    // 1. Recusar erro retornado pelo Google
     // --------------------------------------------------
 
     if (error) {
@@ -168,7 +168,7 @@ export async function onRequestGet(context) {
 
 
     // --------------------------------------------------
-    // 6. Conferir state
+    // 6. Validar state
     // --------------------------------------------------
 
     if (
@@ -187,7 +187,7 @@ export async function onRequestGet(context) {
 
 
     // --------------------------------------------------
-    // 7. Garantir existência do code_verifier
+    // 7. Exigir code_verifier
     // --------------------------------------------------
 
     if (!transaction.code_verifier) {
@@ -204,7 +204,24 @@ export async function onRequestGet(context) {
 
 
     // --------------------------------------------------
-    // 8. Apagar a transação ANTES da conclusão
+    // 8. Exigir nonce
+    // --------------------------------------------------
+
+    if (!transaction.nonce) {
+      return new Response(
+        "Nonce ausente na transação.",
+        {
+          status: 400,
+          headers: {
+            "Cache-Control": "no-store"
+          }
+        }
+      );
+    }
+
+
+    // --------------------------------------------------
+    // 9. Apagar transação antes da conclusão
     // --------------------------------------------------
 
     await env.DB
@@ -217,7 +234,7 @@ export async function onRequestGet(context) {
 
 
     // --------------------------------------------------
-    // 9. Trocar authorization code pelos tokens
+    // 10. Trocar authorization code pelos tokens
     // --------------------------------------------------
 
     const tokenResponse =
@@ -239,7 +256,7 @@ export async function onRequestGet(context) {
             client_secret:
               env.GOOGLE_CLIENT_SECRET,
 
-            code: code,
+            code,
 
             code_verifier:
               transaction.code_verifier,
@@ -259,7 +276,6 @@ export async function onRequestGet(context) {
 
 
     if (!tokenResponse.ok) {
-
       return new Response(
         JSON.stringify({
           error:
@@ -286,7 +302,7 @@ export async function onRequestGet(context) {
 
 
     // --------------------------------------------------
-    // 10. Exigir id_token
+    // 11. Exigir id_token
     // --------------------------------------------------
 
     if (!tokens.id_token) {
@@ -303,53 +319,69 @@ export async function onRequestGet(context) {
 
 
     // --------------------------------------------------
-    // 11. Validar criptograficamente o id_token
+    // 12. Validar criptograficamente o id_token
     // --------------------------------------------------
 
-const identity =
-  await validateGoogleIdToken({
-    idToken: tokens.id_token,
-    clientId: env.GOOGLE_CLIENT_ID,
-    expectedNonce: transaction.nonce
-  });
+    const identity =
+      await validateGoogleIdToken({
+
+        idToken:
+          tokens.id_token,
+
+        clientId:
+          env.GOOGLE_CLIENT_ID,
+
+        expectedNonce:
+          transaction.nonce
+      });
+
+
+    // --------------------------------------------------
+    // 13. Criar sessão opaca local
+    // --------------------------------------------------
 
     const session =
-  await createSession(
-    env,
-    identity
-  );
+      await createSession(
+        env,
+        identity
+      );
+
 
     // --------------------------------------------------
-    // 12. Retorno temporário para teste
+    // 14. Redirecionar para a página inicial
     // --------------------------------------------------
 
-return new Response(null, {
-  status: 302,
+    const headers =
+      new Headers();
 
-  headers: {
-    "Location":
-      env.PUBLIC_BASE_URL,
+    headers.set(
+      "Location",
+      env.PUBLIC_BASE_URL
+    );
 
-    "Set-Cookie":
-      session.cookie,
-
-    "Cache-Control":
+    headers.set(
+      "Cache-Control",
       "no-store"
-  }
-});
+    );
+
+    // Cookie da sessão final
+    headers.append(
+      "Set-Cookie",
+      session.cookie
+    );
+
+    // Apagar cookie temporário OAuth
+    headers.append(
+      "Set-Cookie",
+      "__Host-oauth-tx=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0"
+    );
+
+
+    return new Response(
+      null,
       {
-        status: 200,
-
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          "Cache-Control":
-            "no-store",
-
-          "Set-Cookie":
-            "__Host-oauth-tx=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0"
-        }
+        status: 302,
+        headers
       }
     );
 
@@ -364,7 +396,7 @@ return new Response(null, {
     return new Response(
       JSON.stringify({
         error:
-          "Falha na validação da identidade Google.",
+          "Falha na autenticação Google.",
 
         detail:
           err.message
