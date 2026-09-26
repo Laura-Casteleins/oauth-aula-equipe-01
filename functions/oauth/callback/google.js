@@ -3,6 +3,10 @@ import {
   randomBase64Url
 } from "../../_shared/crypto.js";
 
+import {
+  validateGoogleIdToken
+} from "../../_shared/oidc.js";
+
 function getCookie(request, name) {
   const cookieHeader = request.headers.get("Cookie");
 
@@ -231,27 +235,42 @@ export async function onRequestGet(context) {
       );
     }
 
-    return new Response(
-      JSON.stringify({
-        status: "ok",
-        message:
-          "PKCE, state e troca do código funcionaram corretamente."
-      }),
-      {
-        status: 200,
+const identity =
+  await validateGoogleIdToken({
+    idToken: tokens.id_token,
+    clientId: env.GOOGLE_CLIENT_ID,
+    expectedNonce: transaction.nonce
+  });
 
-        headers: {
-          "Content-Type":
-            "application/json",
+return new Response(
+  JSON.stringify({
+    status: "ok",
+    message:
+      "id_token do Google validado criptograficamente.",
+    issuer:
+      identity.issuer,
+    subject:
+      identity.subject,
+    email:
+      identity.email,
+    displayName:
+      identity.displayName
+  }),
+  {
+    status: 200,
 
-          "Cache-Control":
-            "no-store",
+    headers: {
+      "Content-Type":
+        "application/json",
 
-          "Set-Cookie":
-            "__Host-oauth-tx=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0"
-        }
-      }
-    );
+      "Cache-Control":
+        "no-store",
+
+      "Set-Cookie":
+        "__Host-oauth-tx=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0"
+    }
+  }
+);
 
   } catch (err) {
     console.error(
