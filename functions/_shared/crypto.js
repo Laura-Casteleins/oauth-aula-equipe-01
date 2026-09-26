@@ -1,21 +1,42 @@
-export function generateRandomString(length = 32) {
-  const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
-  let result = "";
-  const randomValues = new Uint8Array(length);
-  crypto.getRandomValues(randomValues);
-  for (let i = 0; i < length; i++) {
-    result += charset[randomValues[i] % charset.length];
-  }
-  return result;
+// functions/_shared/crypto.js
+
+/*Gera bytes aleatórios criptograficamente seguros e converte para Base64URL sem preenchimento.*/
+export function randomBase64Url(bytes = 32) {
+  const randomBytes = new Uint8Array(bytes);
+  crypto.getRandomValues(randomBytes);
+
+  return base64UrlEncode(randomBytes);
 }
 
-export async function sha256(plain) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(plain);
+/*Calcula SHA-256 de um texto.*/
+export async function sha256(value) {
+  const data = new TextEncoder().encode(value);
+
   return await crypto.subtle.digest("SHA-256", data);
 }
 
+/*Converte ArrayBuffer ou Uint8Array para Base64URL sem "=" no final.*/
 export function base64UrlEncode(buffer) {
-  let base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const bytes =
+    buffer instanceof Uint8Array
+      ? buffer
+      : new Uint8Array(buffer);
+
+  let binary = "";
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+/*Calcula o SHA-256 e devolve em Base64URL.*/
+export async function sha256Base64Url(value) {
+  const digest = await sha256(value);
+
+  return base64UrlEncode(digest);
 }
