@@ -148,5 +148,3 @@ As evidências exigidas para avaliação estão em:
 ```text
 public/entrega1/
 ```
-
-Antes da entrega final, deve ser feita uma última conferência para garantir que nenhum cookie, código de autorização, token, `state`, `nonce`, `code_challenge`, `code_verifier` ou segredo esteja presente nos arquivos de evidência.
