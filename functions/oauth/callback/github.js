@@ -240,54 +240,118 @@ export async function onRequestGet(context) {
       );
     }
 
-    const profile =
-      await profileResponse.json();
+const profile =
+  await profileResponse.json();
 
-    if (!Number.isInteger(profile.id)) {
-      return new Response(
-        "Identidade GitHub inválida.",
-        {
-          status: 400,
-          headers: {
-            "Cache-Control": "no-store"
-          }
-        }
-      );
-    }
-
-    // --------------------------------------------------
-    // Ainda NÃO criaremos a sessão.
-    //
-    // No próximo passo faremos a revogação da
-    // autorização no GitHub antes da criação da sessão,
-    // conforme exigido pelo professor.
-    // --------------------------------------------------
-
-    return new Response(
-      JSON.stringify({
-        status: "ok",
-        message:
-          "PKCE, state e consulta do perfil GitHub funcionaram corretamente.",
-        subject:
-          String(profile.id),
-        displayName:
-          profile.name ?? profile.login
-      }),
-      {
-        status: 200,
-
-        headers: {
-          "Content-Type":
-            "application/json",
-
-          "Cache-Control":
-            "no-store",
-
-          "Set-Cookie":
-            "__Host-oauth-tx=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0"
-        }
+if (!Number.isInteger(profile.id)) {
+  return new Response(
+    "Identidade GitHub inválida.",
+    {
+      status: 400,
+      headers: {
+        "Cache-Control": "no-store"
       }
-    );
+    }
+  );
+}
+
+    // --------------------------------------------------
+// 10. Revogar a autorização da OAuth App
+// --------------------------------------------------
+
+const basicCredentials =
+  btoa(
+    `${env.GITHUB_CLIENT_ID}:${env.GITHUB_CLIENT_SECRET}`
+  );
+
+const revokeResponse =
+  await fetch(
+    `https://api.github.com/applications/${env.GITHUB_CLIENT_ID}/grant`,
+    {
+      method: "DELETE",
+
+      headers: {
+        "Authorization":
+          `Basic ${basicCredentials}`,
+
+        "Accept":
+          "application/vnd.github+json",
+
+        "X-GitHub-Api-Version":
+          "2026-03-10",
+
+        "Content-Type":
+          "application/json",
+
+        "User-Agent":
+          "oauth-aula-equipe-01"
+      },
+
+      body: JSON.stringify({
+        access_token:
+          tokens.access_token
+      })
+    }
+  );
+
+if (revokeResponse.status !== 204) {
+  return new Response(
+    JSON.stringify({
+      error:
+        "Falha ao revogar autorização GitHub.",
+      status:
+        revokeResponse.status
+    }),
+    {
+      status: 400,
+
+      headers: {
+        "Content-Type":
+          "application/json",
+
+        "Cache-Control":
+          "no-store"
+      }
+    }
+  );
+}
+
+  return new Response(
+  JSON.stringify({
+    status: "ok",
+
+    message:
+      "PKCE, state, perfil GitHub e revogação da autorização funcionaram corretamente.",
+
+    issuer:
+      "https://github.com",
+
+    subject:
+      String(profile.id),
+
+    email:
+      typeof profile.email === "string"
+        ? profile.email
+        : null,
+
+    displayName:
+      profile.name ?? profile.login
+  }),
+  {
+    status: 200,
+
+    headers: {
+      "Content-Type":
+        "application/json",
+
+      "Cache-Control":
+        "no-store",
+
+      "Set-Cookie":
+        "__Host-oauth-tx=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0"
+    }
+  }
+);
 
   } catch (err) {
     console.error(
