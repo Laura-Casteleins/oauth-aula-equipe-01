@@ -1,4 +1,8 @@
 import {
+  createSession
+} from "../../_shared/session.js";
+
+import {
   sha256Base64Url
 } from "../../_shared/crypto.js";
 
@@ -302,43 +306,37 @@ export async function onRequestGet(context) {
     // 11. Validar criptograficamente o id_token
     // --------------------------------------------------
 
-    const identity =
-      await validateGoogleIdToken({
+const identity =
+  await validateGoogleIdToken({
+    idToken: tokens.id_token,
+    clientId: env.GOOGLE_CLIENT_ID,
+    expectedNonce: transaction.nonce
+  });
 
-        idToken:
-          tokens.id_token,
-
-        clientId:
-          env.GOOGLE_CLIENT_ID,
-
-        expectedNonce:
-          transaction.nonce
-      });
-
+    const session =
+  await createSession(
+    env,
+    identity
+  );
 
     // --------------------------------------------------
     // 12. Retorno temporário para teste
     // --------------------------------------------------
 
-    return new Response(
-      JSON.stringify({
-        status: "ok",
+return new Response(null, {
+  status: 302,
 
-        message:
-          "id_token do Google validado criptograficamente.",
+  headers: {
+    "Location":
+      env.PUBLIC_BASE_URL,
 
-        issuer:
-          identity.issuer,
+    "Set-Cookie":
+      session.cookie,
 
-        subject:
-          identity.subject,
-
-        email:
-          identity.email,
-
-        displayName:
-          identity.displayName
-      }),
+    "Cache-Control":
+      "no-store"
+  }
+});
       {
         status: 200,
 
