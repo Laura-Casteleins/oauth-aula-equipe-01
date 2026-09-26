@@ -21,11 +21,18 @@
         </div>
 
         <div id="user-profile" class="profile-card" style="display: none;">
-            <img id="user-avatar" src="" alt="Avatar" width="80" class="avatar">
-            <h3 id="user-name"></h3>
-            <p id="user-email"></p>
-            <a href="/oauth/logout" class="btn logout-btn">Terminar Sessão (Logout)</a>
-        </div>
+    <img id="user-avatar" src="" alt="Avatar" width="80" class="avatar">
+
+    <h3 id="user-name"></h3>
+
+    <p id="user-email"></p>
+
+    <form method="post" action="/oauth/logout">
+        <button type="submit" class="btn logout-btn">
+            Terminar Sessão (Logout)
+        </button>
+    </form>
+</div>
     </div>
 
     <!-- Correção: Adicionar a barra '/' para carregar da raiz do site -->
