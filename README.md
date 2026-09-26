@@ -4,7 +4,7 @@ Projeto acadêmico de autenticação desenvolvido em Cloudflare Pages, utilizand
 
 URL de produção:
 
-`https://oauth-aula-equipe-01.pages.dev`'(https://oauth-aula-equipe-01.pages.dev)'
+[`https://oauth-aula-equipe-01.pages.dev`](https://oauth-aula-equipe-01.pages.dev)
 
 ## Objetivo
 
