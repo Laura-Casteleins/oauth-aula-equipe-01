@@ -1,30 +1,27 @@
-# Declaração de Aceitação do Projeto
+# Critérios de Aceitação
 
-**Projeto:** Autenticação Web Unificada com Cloudflare Pages e OAuth (Google/GitHub)  
-**Repositório:** `oauth-aula-equipe-01`  
-**Data de Conclusão:** 20/09/2026  
-
-## Elementos da Dupla
-
-1. **Nome:** Laura Casteleins  
-   * **Papel Principal:** Configuração de Infraestrutura, Base de Dados D1 e Integração Google OAuth.  
-2. **Nome:** Gabriel Mendes  
-   * **Papel Principal:** Configuração de Integração GitHub OAuth, Revisão de Código e Coleta de Evidências.  
-
-## Declaração de Conformidade
-
-Declaramos, para efeitos de avaliação, que:
-
-* Todos os requisitos funcionais e de segurança estipulados no enunciado foram integralmente implementados.
-* Os segredos de cliente (*Client Secrets*) encontram-se rigorosamente protegidos como variáveis encriptadas no painel do Cloudflare Pages, sem qualquer exposição no código-fonte do repositório.
-* Os testes de sucesso e de falha foram executados com sucesso em ambiente de produção (`.pages.dev`).
-* Os oito ficheiros de evidência obrigatórios encontram-se devidamente organizados na pasta `public/entrega1/`.
+- [x] o site é servido pelo endereço pages.dev atribuído à equipe;
+- [x] os arquivos estáticos e as Functions compartilham a mesma origem;
+- [x] o projeto foi publicado por integração com GitHub;
+- [x] a equipe não instalou nem executou Node.js, npm, npx ou Wrangler;
+- [x] cada provedor usa uma URL de retorno própria e exata;
+- [x] os pedidos de autorização usam código e PKCE S256;
+- [x] a Function apresenta o Client Secret correto somente na troca de tokens;
+- [x] o retorno recusa uma transação ausente, expirada, alterada ou reutilizada;
+- [x] o id_token do Google só produz uma sessão depois da validação criptográfica e semântica;
+- [x] o access_token do GitHub é usado somente para consultar /user e a autorização é revogada antes da criação da sessão;
+- [x] o cookie de sessão é opaco, Secure, HttpOnly, SameSite=Strict e não possui Domain;
+- [x] o D1 guarda o resumo do cookie, não seu valor bruto;
+- [x] /api/me devolve somente o perfil necessário;
+- [x] o logout confere Origin, remove a sessão e expira o cookie;
+- [x] um cookie revogado não restaura a sessão;
+- [x] tokens e segredos não aparecem no HTML, nas URLs salvas, no armazenamento Web ou nos registros;
+- [x] a dupla consegue explicar por que os arquivos estáticos permanecem públicos;
+- [x] as sessões administrativas foram encerradas no computador compartilhado.
 
 ---
-
-## Assinaturas da Dupla
-
-* **Laura Casteleins** — Atestado de conformidade e conclusão das tarefas sob sua responsabilidade.
-* **Gabriel Mendes** — Atestado de conformidade e conclusão das tarefas sob sua responsabilidade.
-
-*Assinado formalmente por ambos os membros da dupla em sinal de concordância e conclusão dos trabalhos em 20/09/2026.*
+**Assinatura de Aceitação:**
+Declaramos que todos os critérios acima foram cumpridos e validados pela dupla.
+- Laura Casteleins
+- Gabriel Mendes
+Data: 26/09/2026
