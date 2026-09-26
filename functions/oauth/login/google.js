@@ -1,25 +1,165 @@
+import {
+  randomBase64Url,
+  sha256Base64Url,
+} from "../../_shared/crypto.js";
+
 export async function onRequestGet(context) {
-  // O 'env' permite-nos aceder àquelas variáveis secretas que guardámos na Cloudflare
-  const { env, request } = context;
+  const { env } = context;
 
-  // 1. O endereço oficial da Google para iniciar o OAuth
-  const googleLoginUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  try {
+    // --------------------------------------------------
+    // 1. Gerar os valores aleatórios da transação OAuth
+    // --------------------------------------------------
 
-  // 2. Preencher os parâmetros que a Google exige
-  googleLoginUrl.searchParams.append('client_id', env.GOOGLE_CLIENT_ID);
-  
-  // O endereço exato de callback que configurámos no painel da Google
-  googleLoginUrl.searchParams.append('redirect_uri', 'https://oauth-aula-equipe-01.pages.dev/oauth/callback/google');
-  
-  // O tipo de resposta (queremos um código de autorização)
-  googleLoginUrl.searchParams.append('response_type', 'code');
-  
-  // O que queremos saber do utilizador (o email e o perfil básico)
-  googleLoginUrl.searchParams.append('scope', 'openid email profile');
-  
-  // Opcional: força a Google a perguntar qual conta escolher (útil para testes)
-  googleLoginUrl.searchParams.append('prompt', 'select_account');
+    const transactionId = randomBase64Url(32);
+    const state = randomBase64Url(32);
+    const nonce = randomBase64Url(32);
+    const codeVerifier = randomBase64Url(32);
 
-  // 3. Redirecionar o navegador do utilizador para esse link da Google
-  return Response.redirect(googleLoginUrl.toString(), 302);
+    // --------------------------------------------------
+    // 2. Criar os resumos SHA-256
+    // --------------------------------------------------
+
+    const transactionIdHash =
+      await sha256Base64Url(transactionId);
+
+    const stateHash =
+      await sha256Base64Url(state);
+
+    // PKCE S256
+    const codeChallenge =
+      await sha256Base64Url(codeVerifier);
+
+    // --------------------------------------------------
+    // 3. Definir validade da transação
+    // 10 minutos = 600 segundos
+    // --------------------------------------------------
+
+    const expiresAt =
+      Math.floor(Date.now() / 1000) + 600;
+
+    // --------------------------------------------------
+    // 4. Gravar a transação no D1
+    // --------------------------------------------------
+
+    await env.DB
+      .prepare(`
+        INSERT INTO oauth_transactions (
+          id_hash,
+          provider,
+          state_hash,
+          nonce,
+          code_verifier,
+          expires_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+      `)
+      .bind(
+        transactionIdHash,
+        "google",
+        stateHash,
+        nonce,
+        codeVerifier,
+        expiresAt
+      )
+      .run();
+
+    // --------------------------------------------------
+    // 5. URL de callback
+    // --------------------------------------------------
+
+    const redirectUri =
+      `${env.PUBLIC_BASE_URL}/oauth/callback/google`;
+
+    // --------------------------------------------------
+    // 6. Criar URL de autorização do Google
+    // --------------------------------------------------
+
+    const authorizationUrl =
+      new URL(
+        "https://accounts.google.com/o/oauth2/v2/auth"
+      );
+
+    authorizationUrl.searchParams.set(
+      "client_id",
+      env.GOOGLE_CLIENT_ID
+    );
+
+    authorizationUrl.searchParams.set(
+      "redirect_uri",
+      redirectUri
+    );
+
+    authorizationUrl.searchParams.set(
+      "response_type",
+      "code"
+    );
+
+    authorizationUrl.searchParams.set(
+      "scope",
+      "openid email profile"
+    );
+
+    authorizationUrl.searchParams.set(
+      "state",
+      state
+    );
+
+    authorizationUrl.searchParams.set(
+      "nonce",
+      nonce
+    );
+
+    authorizationUrl.searchParams.set(
+      "code_challenge",
+      codeChallenge
+    );
+
+    authorizationUrl.searchParams.set(
+      "code_challenge_method",
+      "S256"
+    );
+
+    // --------------------------------------------------
+    // 7. Criar cookie temporário da transação
+    // --------------------------------------------------
+
+    const cookie =
+      `__Host-oauth-tx=${transactionId}; ` +
+      `Path=/; ` +
+      `HttpOnly; ` +
+      `Secure; ` +
+      `SameSite=Lax; ` +
+      `Max-Age=600`;
+
+    // --------------------------------------------------
+    // 8. Redirecionar para o Google
+    // --------------------------------------------------
+
+    return new Response(null, {
+      status: 302,
+
+      headers: {
+        Location: authorizationUrl.toString(),
+        "Set-Cookie": cookie,
+        "Cache-Control": "no-store",
+      },
+    });
+
+  } catch (error) {
+    console.error(
+      "Erro ao iniciar login Google:",
+      error
+    );
+
+    return new Response(
+      "Não foi possível iniciar a autenticação.",
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      }
+    );
+  }
 }
