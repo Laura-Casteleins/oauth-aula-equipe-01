@@ -1,14 +1,14 @@
 # OAuth/OIDC com Google e GitHub — Cloudflare Pages
 
-Projeto acadêmico de autenticação desenvolvido para Cloudflare Pages, utilizando Cloudflare Functions e banco D1.
+Projeto acadêmico de autenticação desenvolvido em Cloudflare Pages, utilizando Pages Functions, banco D1, Google OpenID Connect e GitHub OAuth.
 
-URL da aplicação:
+URL de produção:
 
-[`https://oauth-aula-equipe-01.pages.dev`](https://oauth-aula-equipe-01.pages.dev)
+`https://oauth-aula-equipe-01.pages.dev`(https://oauth-aula-equipe-01.pages.dev)
 
 ## Objetivo
 
-Implementar autenticação com Google e GitHub usando Authorization Code Flow com PKCE S256, mantendo os segredos apenas no servidor, registrando transações e sessões no D1 e aplicando controles de segurança no início do login, callback, sessão, consulta de usuário e logout.
+Implementar autenticação com Google e GitHub por Authorization Code Flow com PKCE S256, mantendo segredos apenas no ambiente servidor, registrando transações e sessões no D1 e aplicando controles de segurança no início do login, callback, sessão, consulta de usuário e logout.
 
 ## Tecnologias utilizadas
 
@@ -21,14 +21,15 @@ Implementar autenticação com Google e GitHub usando Authorization Code Flow co
 - PKCE com SHA-256
 - Web Crypto API
 
-O projeto foi desenvolvido diretamente no ambiente da Cloudflare, sem uso de Node.js, npm, npx, Wrangler ou pacotes externos para execução da aplicação.
+O projeto não utiliza Node.js, npm, npx, Wrangler, `package.json`, `package-lock.json`, `node_modules` ou bibliotecas externas para executar a autenticação.
 
-## Estrutura principal
+## Estrutura principal do projeto
 
 ```text
 public/
 ├── index.html
 ├── app.js
+├── styles.css
 └── entrega1/
     ├── 01-pages-configuracao.pdf
     ├── 02-google-retorno.txt
@@ -41,11 +42,13 @@ public/
 
 functions/
 ├── _shared/
+│   ├── cookies.js
 │   ├── crypto.js
 │   ├── oidc.js
 │   ├── providers.js
 │   └── session.js
 ├── api/
+│   ├── health.js
 │   └── me.js
 └── oauth/
     ├── login/
@@ -57,32 +60,34 @@ functions/
     └── logout.js
 ```
 
-A pasta `public/entrega1` contém exatamente os 8 arquivos exigidos para a entrega.
+A pasta `public/entrega1` contém exatamente os oito arquivos exigidos para a entrega.
 
-## Variáveis e segredos
+## Configuração do Cloudflare Pages
 
-As seguintes configurações são utilizadas no projeto:
+O projeto utiliza:
 
 - `PUBLIC_BASE_URL`
 - `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
 - `GITHUB_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
 - `GITHUB_CLIENT_SECRET`
 - binding D1 chamado `DB`
 
-A URL base utilizada é:
+A URL base de produção é:
 
 `https://oauth-aula-equipe-01.pages.dev`
 
-Os Client Secrets são mantidos como variáveis criptografadas no ambiente Cloudflare e não são expostos no código público, URLs, HTML, armazenamento do navegador ou arquivos de evidência.
+`PUBLIC_BASE_URL` não possui barra final.
+
+Os Client IDs são configurados como variáveis de texto. Os Client Secrets são configurados como segredos criptografados no Cloudflare Pages e não são armazenados no repositório.
 
 ## Banco D1
 
-O banco utiliza duas tabelas principais.
+O D1 utiliza duas tabelas principais.
 
-### oauth_transactions
+### `oauth_transactions`
 
-Responsável pelas transações temporárias de OAuth.
+Armazena as transações temporárias do fluxo OAuth.
 
 Campos:
 
@@ -93,13 +98,13 @@ Campos:
 - `code_verifier`
 - `expires_at`
 
-Também existe o índice:
+Índice:
 
 `oauth_transactions_expiry`
 
-### sessions
+### `sessions`
 
-Responsável pelas sessões locais autenticadas.
+Armazena as sessões locais autenticadas.
 
 Campos:
 
@@ -111,43 +116,45 @@ Campos:
 - `expires_at`
 - `created_at`
 
-Também existe o índice:
+Índice:
 
 `sessions_expiry`
 
-Somente o hash do identificador da sessão é armazenado no D1.
+O D1 armazena somente o hash do identificador da sessão, e não o valor bruto do cookie.
 
 ## Geração de valores aleatórios e hashes
 
-Os valores aleatórios são gerados com `crypto.getRandomValues`.
+Os valores aleatórios são gerados com:
+
+`crypto.getRandomValues()`
 
 São utilizados 32 bytes aleatórios, codificados em Base64URL sem padding.
 
-O SHA-256 é utilizado para:
+SHA-256 é utilizado para calcular:
 
-- `code_challenge` do PKCE;
+- `code_challenge` a partir do `code_verifier`;
 - hash do identificador da transação;
-- hash do parâmetro `state`;
+- hash de `state`;
 - hash do identificador da sessão.
 
 ## Login com Google
 
-A rota de início é:
+Rota:
 
-`/oauth/login/google`
+`GET /oauth/login/google`
 
-O fluxo:
+O início do fluxo:
 
-1. gera identificador de transação;
+1. gera o identificador da transação;
 2. gera `state`;
 3. gera `nonce`;
 4. gera `code_verifier`;
 5. calcula `code_challenge` com SHA-256;
-6. armazena os hashes e dados da transação no D1;
+6. grava a transação no D1;
 7. cria o cookie temporário `__Host-oauth-tx`;
-8. redireciona para o Google.
+8. responde com redirecionamento HTTP 302 para o Google.
 
-O pedido ao Google contém:
+O pedido de autorização contém:
 
 - `client_id`;
 - `redirect_uri`;
@@ -158,44 +165,48 @@ O pedido ao Google contém:
 - `code_challenge`;
 - `code_challenge_method=S256`.
 
-O Client Secret e o `code_verifier` não são enviados na URL de autorização.
+O Client Secret e o `code_verifier` não aparecem na URL de autorização.
 
-O callback utilizado é:
+Callback:
 
-`/oauth/callback/google`
+`https://oauth-aula-equipe-01.pages.dev/oauth/callback/google`
 
-## Validação Google OIDC
+## Validação do Google OIDC
 
-Após o retorno do Google, o código de autorização é trocado no servidor.
+No callback do Google, a aplicação:
 
-O `id_token` recebido é validado antes da criação da sessão local.
+1. exige `code` e `state`;
+2. exige o cookie temporário;
+3. localiza uma transação válida e não expirada;
+4. compara o hash de `state`;
+5. remove a transação antes de concluir o fluxo;
+6. troca o código usando o `code_verifier` e o Client Secret;
+7. valida o `id_token`;
+8. cria a sessão local somente após a validação completa.
 
-A validação inclui:
+A validação do `id_token` inclui:
 
-- estrutura JWT com três partes;
-- algoritmo `RS256`;
-- obtenção do documento de descoberta OpenID Connect;
-- obtenção da chave pública pelo `jwks_uri`;
-- seleção da chave pelo `kid`;
-- verificação criptográfica da assinatura com Web Crypto;
+- JWT com três partes;
+- `alg=RS256`;
+- descoberta OIDC;
+- obtenção do `jwks_uri`;
+- seleção da chave por `kid`;
+- importação da JWK;
+- verificação da assinatura com Web Crypto;
 - validação de `iss`;
 - validação de `aud`;
 - validação de `exp`;
 - validação de `iat`;
 - validação de `nonce`;
-- validação da existência de `sub`.
-
-A identidade somente é utilizada após a validação criptográfica e semântica do token.
+- validação de `sub`.
 
 ## Login com GitHub
 
-A rota de início é:
+Rota:
 
-`/oauth/login/github`
+`GET /oauth/login/github`
 
-O fluxo utiliza Authorization Code com PKCE S256.
-
-A URL de autorização inclui:
+O pedido de autorização contém:
 
 - `client_id`;
 - `redirect_uri`;
@@ -204,7 +215,7 @@ A URL de autorização inclui:
 - `code_challenge`;
 - `code_challenge_method=S256`.
 
-O início do login GitHub não envia:
+O pedido ao GitHub omite:
 
 - `scope`;
 - `nonce`;
@@ -212,26 +223,35 @@ O início do login GitHub não envia:
 - `user:email`;
 - `offline_access`.
 
-O callback utilizado é:
+Callback:
 
-`/oauth/callback/github`
+`https://oauth-aula-equipe-01.pages.dev/oauth/callback/github`
 
-Após a troca do código:
+Após a troca do código, a aplicação:
 
-1. é exigido `access_token`;
-2. o `token_type` deve ser `Bearer`;
-3. é realizada uma requisição para `https://api.github.com/user`;
-4. a resposta deve possuir status HTTP 200;
-5. o campo `id` deve ser um número inteiro;
-6. a identidade local utiliza o ID numérico do GitHub como `subject`;
-7. o token GitHub é revogado antes da criação da sessão local;
-8. somente após a revogação bem-sucedida é criada a sessão da aplicação.
+1. exige `access_token`;
+2. exige `token_type` compatível com `Bearer`;
+3. consulta `GET https://api.github.com/user`;
+4. envia `Authorization: Bearer`;
+5. envia `Accept: application/vnd.github+json`;
+6. envia `X-GitHub-Api-Version: 2026-03-10`;
+7. exige resposta HTTP 200;
+8. exige um `id` inteiro;
+9. usa `https://github.com` como `issuer`;
+10. converte o `id` numérico para texto e o utiliza como `subject`;
+11. usa `name` ou `login` apenas para apresentação;
+12. aceita e-mail nulo;
+13. revoga a autorização no GitHub antes de criar a sessão local.
 
-O e-mail do GitHub pode ser nulo, pois nenhum escopo adicional de e-mail é solicitado.
+A revogação é feita por:
 
-## Transação OAuth temporária
+`DELETE https://api.github.com/applications/{client_id}/grant`
 
-O cookie temporário utilizado é:
+A aplicação exige HTTP 204 antes de criar a sessão local.
+
+## Cookie temporário da transação
+
+Cookie:
 
 `__Host-oauth-tx`
 
@@ -252,13 +272,11 @@ A aplicação rejeita transações:
 - com `state` alterado;
 - já utilizadas.
 
-A transação é removida antes da conclusão da autenticação para impedir reutilização.
-
 ## Sessão local
 
-Após uma autenticação válida, é criado um identificador de sessão opaco e aleatório.
+Após a confirmação da identidade, é criado um identificador de sessão aleatório e opaco.
 
-O navegador recebe:
+Cookie:
 
 `__Host-session`
 
@@ -272,57 +290,64 @@ SameSite=Strict
 Max-Age=28800
 ```
 
-A sessão possui duração máxima de 8 horas.
+A sessão possui duração de 8 horas.
 
-O valor original do identificador da sessão não é armazenado no D1. O banco mantém apenas seu hash SHA-256.
+O navegador recebe o identificador bruto da sessão, enquanto o D1 armazena apenas o hash SHA-256 correspondente.
 
-## Endpoint /api/me
+## `/api/me`
+
+Rota:
+
+`GET /api/me`
 
 A rota:
 
-`/api/me`
+1. lê o cookie `__Host-session`;
+2. calcula seu hash;
+3. procura uma sessão válida e não expirada no D1;
+4. devolve somente o perfil mínimo necessário.
 
-consulta o cookie `__Host-session`, calcula seu hash e verifica a sessão correspondente no D1.
-
-Para sessão válida, retorna os dados mínimos do usuário autenticado.
-
-Para sessão ausente, inválida ou expirada, retorna HTTP 401 com:
-
-```json
-{"authenticated":false}
-```
+Para uma sessão ausente, inválida ou expirada, responde com HTTP 401.
 
 As respostas utilizam:
 
 `Cache-Control: no-store`
 
+## `/api/health`
+
+A rota de saúde é utilizada para verificar se as Pages Functions estão reconhecidas e respondendo corretamente na implantação.
+
 ## Logout
 
-O logout é realizado exclusivamente por:
+Rota:
 
 `POST /oauth/logout`
 
-A rota verifica se o cabeçalho `Origin` corresponde exatamente a `PUBLIC_BASE_URL`.
+O logout:
 
-Quando o logout é válido:
+1. aceita somente POST;
+2. exige que o cabeçalho `Origin` seja exatamente igual a `PUBLIC_BASE_URL`;
+3. identifica a sessão pelo cookie;
+4. calcula o hash da sessão;
+5. remove a sessão correspondente do D1;
+6. expira o cookie `__Host-session`;
+7. responde com `Cache-Control: no-store`.
 
-1. identifica a sessão pelo cookie;
-2. calcula o hash do identificador;
-3. remove a sessão correspondente do D1;
-4. expira o cookie `__Host-session`;
-5. retorna para a aplicação.
-
-Tentativas de logout originadas de outro domínio são recusadas.
+Uma requisição de logout originada de outro domínio é recusada e não deve invalidar a sessão legítima.
 
 ## Aplicação estática
 
-A interface pública utiliza arquivos estáticos em `public`.
+Os arquivos em `public` permanecem públicos e podem ser acessados diretamente por URL.
 
-O JavaScript da aplicação consulta `/api/me` com credenciais de mesma origem para verificar o estado de autenticação.
+A página consulta:
 
-O logout é enviado por formulário HTTP `POST`.
+`/api/me`
 
-Nenhum token OAuth é armazenado em `localStorage` ou `sessionStorage`.
+com credenciais de mesma origem.
+
+O logout é realizado por formulário HTTP POST.
+
+Nenhum `access_token`, `refresh_token` ou Client Secret é enviado ao navegador para armazenamento.
 
 ## Testes de falha
 
@@ -330,97 +355,131 @@ O arquivo:
 
 `public/entrega1/07-testes-falha.md`
 
-documenta 6 testes obrigatórios e 1 teste complementar.
+registra os seis testes obrigatórios e um teste complementar.
 
-Foram verificados:
+Testes registrados:
 
 1. retorno sem cookie temporário;
-2. alteração do parâmetro `state`;
-3. reutilização de callback/transação;
+2. `state` alterado;
+3. reutilização da transação;
 4. sessão expirada;
-5. tentativa de logout a partir de origem inválida;
-6. reutilização de cookie de sessão após logout;
+5. origem inválida no logout;
+6. reutilização do cookie revogado;
 7. transação OAuth expirada, como teste complementar.
 
-Os resultados confirmaram a rejeição das condições inválidas testadas.
+No teste de origem inválida, a tentativa externa é recusada e a sessão original permanece válida.
 
 ## Evidências da entrega
 
-A pasta `public/entrega1` contém:
+A pasta `public/entrega1` contém exatamente:
 
-### 01-pages-configuracao.pdf
+### `01-pages-configuracao.pdf`
 
-Evidência da configuração do projeto Cloudflare Pages.
+Evidência da configuração do Cloudflare Pages, incluindo projeto, ramificação de produção e opções de construção.
 
-### 02-google-retorno.txt
+### `02-google-retorno.txt`
 
-Registro relacionado ao retorno do fluxo Google.
+URL de retorno cadastrada no Google.
 
-### 03-github-retorno.txt
+### `03-github-retorno.txt`
 
-Registro relacionado ao retorno do fluxo GitHub.
+Homepage URL e Authorization callback URL cadastradas no GitHub.
 
-### 04-d1-esquema.txt
+### `04-d1-esquema.txt`
 
-Registro dos objetos relevantes existentes no `sqlite_schema` do banco D1.
+Nomes e tipos retornados pelo `sqlite_schema` do D1.
 
-### 05-inicio-login-google.pdf
+### `05-inicio-login-google.pdf`
 
-Evidência do início do login Google, incluindo resposta HTTP 302, PKCE S256 e cookie temporário seguro.
+Cabeçalhos saneados do início do login Google.
 
-Os valores transitórios como `state`, `nonce`, `code_challenge` e cookie de transação foram removidos das evidências.
+A evidência mostra:
 
-### 06-inicio-login-github.pdf
+- HTTP 302;
+- `__Host-oauth-tx`;
+- `Location` para o Google;
+- `response_type=code`;
+- `code_challenge_method=S256`;
+- URL de retorno correta;
+- ausência de Client Secret e `code_verifier`.
 
-Evidência do início do login GitHub, incluindo resposta HTTP 302, PKCE S256 e cookie temporário seguro.
+Valores transitórios como cookie, `state`, `nonce` e `code_challenge` foram ocultados.
 
-Os valores de `state`, `code_challenge` e cookie de transação foram removidos das evidências.
+### `06-inicio-login-github.pdf`
 
-### 07-testes-falha.md
+Cabeçalhos saneados do início do login GitHub.
 
-Descrição dos testes negativos e resultados observados.
+A evidência mostra:
 
-### 08-aceitacao.md
+- HTTP 302;
+- `__Host-oauth-tx`;
+- `Location` para o GitHub;
+- `response_type=code`;
+- `code_challenge_method=S256`;
+- ausência de `nonce`;
+- ausência de `scope`, `repo`, `user:email` e `offline_access`.
 
-Checklist final de aceitação do projeto.
+Valores transitórios como cookie, `state` e `code_challenge` foram ocultados.
+
+### `07-testes-falha.md`
+
+Registro dos testes obrigatórios e seus resultados observados.
+
+### `08-aceitacao.md`
+
+Lista final dos critérios de aceitação da atividade.
 
 ## Segurança das evidências
 
-Antes da entrega, foram removidos ou ocultados das capturas e documentos valores como:
+Não devem aparecer nas evidências:
 
-- cookies;
+- valores de cookies;
 - códigos de autorização;
 - access tokens;
+- refresh tokens;
 - Client Secrets;
 - `state`;
 - `nonce`;
 - `code_challenge`;
-- `code_verifier`.
+- `code_verifier`;
+- corpos completos de troca de tokens.
 
-Não devem ser incluídos segredos ou valores reutilizáveis no repositório ou nos arquivos de entrega.
+Quando necessário, valores sensíveis ou transitórios devem ser substituídos por:
 
-## Critérios atendidos
+`[REMOVIDO]`
+
+## Critérios implementados
 
 A solução implementa:
 
-- Google e GitHub na mesma origem;
+- publicação em endereço `pages.dev`;
+- arquivos estáticos e Functions na mesma origem;
+- integração do projeto com GitHub;
 - Authorization Code com PKCE S256;
-- transações temporárias armazenadas no D1;
-- validação de `state`;
-- `nonce` no Google OIDC;
-- validação criptográfica do Google `id_token`;
-- identificação do usuário GitHub por `/user`;
-- revogação do token GitHub antes da sessão local;
-- sessão opaca;
-- armazenamento somente do hash da sessão;
-- cookie seguro, HttpOnly e com prefixo `__Host-`;
+- URLs de retorno específicas para Google e GitHub;
+- Client Secret somente no servidor;
+- transações temporárias no D1;
+- proteção por `state`;
+- `nonce` no Google;
+- validação criptográfica e semântica do Google `id_token`;
+- confirmação da identidade GitHub pela API `/user`;
+- revogação da autorização GitHub antes da criação da sessão;
+- sessão local opaca;
+- hash da sessão armazenado no D1;
+- cookie de sessão `Secure`, `HttpOnly` e `SameSite=Strict`;
 - `/api/me`;
 - logout somente por POST;
 - validação exata do `Origin`;
-- revogação da sessão no D1;
-- proteção contra reutilização da sessão após logout;
-- respostas de autenticação sem cache.
+- remoção da sessão do D1 no logout;
+- proteção contra reutilização de cookie revogado;
+- `Cache-Control: no-store` nas respostas relacionadas à autenticação e sessão.
 
-## Observação final
+## Encerramento
 
-Após a conclusão dos testes e da entrega, sessões administrativas utilizadas em computadores compartilhados devem ser encerradas, e qualquer valor temporário copiado durante os testes deve ser descartado.
+Antes da entrega final:
+
+- confirmar que os Client Secrets continuam criptografados no Cloudflare Pages;
+- confirmar que nenhum segredo aparece no histórico do GitHub;
+- remover qualquer valor temporário copiado durante os testes;
+- encerrar sessões administrativas abertas em computadores compartilhados;
+- entregar somente as evidências saneadas exigidas.
