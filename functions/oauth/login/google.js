@@ -1,23 +1,91 @@
 import {
-  randomBase64Url,
   sha256Base64Url,
+  randomBase64Url
 } from "../../_shared/crypto.js";
 
+function getCookie(request, name) {
+  const cookieHeader = request.headers.get("Cookie");
+
+  if (!cookieHeader) {
+    return null;
+  }
+
+  const cookies = cookieHeader.split(";");
+
+  for (const cookie of cookies) {
+    const [key, ...valueParts] = cookie.trim().split("=");
+
+    if (key === name) {
+      return valueParts.join("=");
+    }
+  }
+
+  return null;
+}
+
 export async function onRequestGet(context) {
-  const { env } = context;
+  const { request, env } = context;
+
+  const url = new URL(request.url);
+
+  const error = url.searchParams.get("error");
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
 
   try {
     // --------------------------------------------------
-    // 1. Gerar os valores aleatórios da transação OAuth
+    // 1. Recusar erro retornado pelo Google
     // --------------------------------------------------
 
-    const transactionId = randomBase64Url(32);
-    const state = randomBase64Url(32);
-    const nonce = randomBase64Url(32);
-    const codeVerifier = randomBase64Url(32);
+    if (error) {
+      return new Response(
+        "Autenticação recusada pelo provedor.",
+        {
+          status: 400,
+          headers: {
+            "Cache-Control": "no-store"
+          }
+        }
+      );
+    }
 
     // --------------------------------------------------
-    // 2. Criar os resumos SHA-256
+    // 2. Exigir code e state
+    // --------------------------------------------------
+
+    if (!code || !state) {
+      return new Response(
+        "Resposta OAuth inválida.",
+        {
+          status: 400,
+          headers: {
+            "Cache-Control": "no-store"
+          }
+        }
+      );
+    }
+
+    // --------------------------------------------------
+    // 3. Exigir cookie temporário
+    // --------------------------------------------------
+
+    const transactionId =
+      getCookie(request, "__Host-oauth-tx");
+
+    if (!transactionId) {
+      return new Response(
+        "Transação OAuth ausente.",
+        {
+          status: 400,
+          headers: {
+            "Cache-Control": "no-store"
+          }
+        }
+      );
+    }
+
+    // --------------------------------------------------
+    // 4. Calcular hashes
     // --------------------------------------------------
 
     const transactionIdHash =
@@ -26,139 +94,180 @@ export async function onRequestGet(context) {
     const stateHash =
       await sha256Base64Url(state);
 
-    // PKCE S256
-    const codeChallenge =
-      await sha256Base64Url(codeVerifier);
-
     // --------------------------------------------------
-    // 3. Definir validade da transação
-    // 10 minutos = 600 segundos
+    // 5. Buscar transação no D1
     // --------------------------------------------------
 
-    const expiresAt =
-      Math.floor(Date.now() / 1000) + 600;
+    const now =
+      Math.floor(Date.now() / 1000);
+
+    const transaction =
+      await env.DB
+        .prepare(`
+          SELECT
+            id_hash,
+            provider,
+            state_hash,
+            nonce,
+            code_verifier,
+            expires_at
+          FROM oauth_transactions
+          WHERE id_hash = ?
+            AND provider = 'google'
+            AND expires_at > ?
+        `)
+        .bind(
+          transactionIdHash,
+          now
+        )
+        .first();
+
+    if (!transaction) {
+      return new Response(
+        "Transação OAuth inválida ou expirada.",
+        {
+          status: 400,
+          headers: {
+            "Cache-Control": "no-store"
+          }
+        }
+      );
+    }
 
     // --------------------------------------------------
-    // 4. Gravar a transação no D1
+    // 6. Validar state
+    // --------------------------------------------------
+
+    if (transaction.state_hash !== stateHash) {
+      return new Response(
+        "State inválido.",
+        {
+          status: 400,
+          headers: {
+            "Cache-Control": "no-store"
+          }
+        }
+      );
+    }
+
+    // --------------------------------------------------
+    // 7. Apagar transação ANTES da troca
     // --------------------------------------------------
 
     await env.DB
       .prepare(`
-        INSERT INTO oauth_transactions (
-          id_hash,
-          provider,
-          state_hash,
-          nonce,
-          code_verifier,
-          expires_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
+        DELETE FROM oauth_transactions
+        WHERE id_hash = ?
       `)
-      .bind(
-        transactionIdHash,
-        "google",
-        stateHash,
-        nonce,
-        codeVerifier,
-        expiresAt
-      )
+      .bind(transactionIdHash)
       .run();
 
     // --------------------------------------------------
-    // 5. URL de callback
+    // 8. Trocar código pelo token usando PKCE
     // --------------------------------------------------
 
-    const redirectUri =
-      `${env.PUBLIC_BASE_URL}/oauth/callback/google`;
+    const tokenResponse =
+      await fetch(
+        "https://oauth2.googleapis.com/token",
+        {
+          method: "POST",
 
-    // --------------------------------------------------
-    // 6. Criar URL de autorização do Google
-    // --------------------------------------------------
+          headers: {
+            "Content-Type":
+              "application/x-www-form-urlencoded"
+          },
 
-    const authorizationUrl =
-      new URL(
-        "https://accounts.google.com/o/oauth2/v2/auth"
+          body: new URLSearchParams({
+            client_id:
+              env.GOOGLE_CLIENT_ID,
+
+            client_secret:
+              env.GOOGLE_CLIENT_SECRET,
+
+            code,
+
+            code_verifier:
+              transaction.code_verifier,
+
+            grant_type:
+              "authorization_code",
+
+            redirect_uri:
+              `${env.PUBLIC_BASE_URL}/oauth/callback/google`
+          })
+        }
       );
 
-    authorizationUrl.searchParams.set(
-      "client_id",
-      env.GOOGLE_CLIENT_ID
-    );
+    const tokens =
+      await tokenResponse.json();
 
-    authorizationUrl.searchParams.set(
-      "redirect_uri",
-      redirectUri
-    );
-
-    authorizationUrl.searchParams.set(
-      "response_type",
-      "code"
-    );
-
-    authorizationUrl.searchParams.set(
-      "scope",
-      "openid email profile"
-    );
-
-    authorizationUrl.searchParams.set(
-      "state",
-      state
-    );
-
-    authorizationUrl.searchParams.set(
-      "nonce",
-      nonce
-    );
-
-    authorizationUrl.searchParams.set(
-      "code_challenge",
-      codeChallenge
-    );
-
-    authorizationUrl.searchParams.set(
-      "code_challenge_method",
-      "S256"
-    );
+    if (!tokenResponse.ok) {
+      return new Response(
+        "Falha na troca do código OAuth.",
+        {
+          status: 400,
+          headers: {
+            "Cache-Control": "no-store"
+          }
+        }
+      );
+    }
 
     // --------------------------------------------------
-    // 7. Criar cookie temporário da transação
+    // Por enquanto paramos aqui.
+    // O próximo passo será validar o id_token
+    // criptograficamente, conforme o PDF.
     // --------------------------------------------------
 
-    const cookie =
-      `__Host-oauth-tx=${transactionId}; ` +
-      `Path=/; ` +
-      `HttpOnly; ` +
-      `Secure; ` +
-      `SameSite=Lax; ` +
-      `Max-Age=600`;
+    if (!tokens.id_token) {
+      return new Response(
+        "id_token não recebido.",
+        {
+          status: 400,
+          headers: {
+            "Cache-Control": "no-store"
+          }
+        }
+      );
+    }
 
-    // --------------------------------------------------
-    // 8. Redirecionar para o Google
-    // --------------------------------------------------
+    return new Response(
+      JSON.stringify({
+        status: "ok",
+        message:
+          "PKCE, state e troca do código funcionaram corretamente."
+      }),
+      {
+        status: 200,
 
-    return new Response(null, {
-      status: 302,
+        headers: {
+          "Content-Type":
+            "application/json",
 
-      headers: {
-        Location: authorizationUrl.toString(),
-        "Set-Cookie": cookie,
-        "Cache-Control": "no-store",
-      },
-    });
+          "Cache-Control":
+            "no-store",
 
-  } catch (error) {
+          "Set-Cookie":
+            "__Host-oauth-tx=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0"
+        }
+      }
+    );
+
+  } catch (err) {
     console.error(
-      "Erro ao iniciar login Google:",
-      error
+      "Erro no callback Google:",
+      err
     );
 
     return new Response(
-      "Não foi possível iniciar a autenticação.",
+      "Erro interno durante autenticação.",
       {
         status: 500,
+
         headers: {
-          "Cache-Control": "no-store",
-        },
+          "Cache-Control":
+            "no-store"
+        }
       }
     );
   }
