@@ -99,10 +99,10 @@ fetch("https://oauth-aula-equipe-01.pages.dev/oauth/logout", {
 ```
 
 **Resultado esperado:**  
-A rota deveria recusar a operação porque o cabeçalho `Origin` não correspondia a `PUBLIC_BASE_URL`, sem revogar a sessão legítima.
+A rota deveria recusar a operação porque o cabeçalho `Origin` não correspondia a `PUBLIC_BASE_URL`. Após a tentativa, a sessão original aberta em `https://oauth-aula-equipe-01.pages.dev` deveria permanecer válida.
 
 **Resultado observado:**  
-A requisição externa foi recusada com HTTP `403 (Forbidden)`. O navegador também bloqueou a leitura da resposta devido à política de CORS. Após retornar à aplicação, a tentativa externa não foi aceita como logout legítimo.
+A requisição externa foi recusada com HTTP `403 (Forbidden)`. O navegador também bloqueou a leitura da resposta devido à política de CORS. Após retornar à aplicação em `https://oauth-aula-equipe-01.pages.dev`, a sessão original permaneceu válida e `/api/me` continuou reconhecendo o usuário como autenticado.
 
 ---
 
@@ -152,7 +152,7 @@ Os testes demonstraram que a aplicação:
 - detecta alteração do parâmetro `state`;
 - impede a reutilização de uma transação OAuth já consumida;
 - rejeita sessões expiradas;
-- bloqueia tentativas de logout provenientes de origem inválida;
+- bloqueia tentativas de logout provenientes de origem inválida sem invalidar a sessão legítima;
 - impede a reutilização de cookies de sessão revogados;
 - rejeita transações OAuth expiradas.
 
